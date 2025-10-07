@@ -1,0 +1,22 @@
+# deps y builds en cualquier subcarpeta
+**/node_modules/
+**/dist/
+**/coverage/
+**/.angular/cache/
+**/.cache/
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# env
+.env
+**/.env*
+.env.local
+
+# IDE/SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

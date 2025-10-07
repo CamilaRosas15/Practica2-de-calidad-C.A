@@ -1,12 +1,26 @@
 import { TestBed } from '@angular/core/testing';
-import { RecipeService } from './recipe';
+import {
+  HttpClientTestingModule,
+  HttpTestingController,
+} from '@angular/common/http/testing';
 
-describe('RecipeService', () => { // <-- CORREGIDO AQUÍ
-  let service: RecipeService; // <-- CORREGIDO AQUÍ
+import { RecipeService, Receta, RecommendRequest, RecommendResponse } from './recipe';
+
+describe('RecipeService', () => {
+  let service: RecipeService;
+  let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(RecipeService); // <-- CORREGIDO AQUÍ
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule], 
+      providers: [RecipeService],
+    });
+    service = TestBed.inject(RecipeService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
   });
 
   it('should be created', () => {

@@ -6,7 +6,6 @@ describe('NutrichefAiController', () => {
   let controller: NutrichefAiController;
 
   const aiServiceMock = {
-    // métodos que el controller llame
   };
 
   beforeEach(async () => {

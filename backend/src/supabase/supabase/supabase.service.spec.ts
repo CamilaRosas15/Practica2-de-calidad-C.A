@@ -7,9 +7,8 @@ describe('SupabaseService', () => {
 
   const configMock = {
     get: jest.fn((key: string) => {
-      if (key === 'SUPABASE_URL') return 'https://example.supabase.co'; // URL válida
-      if (key === 'SUPABASE_ANON_KEY') return 'ey_dummy_anon_key';      // cualquier string no vacío
-      // si tu servicio usa otra clave, por ej. 'SUPABASE_SERVICE_KEY', añade otro if aquí
+      if (key === 'SUPABASE_URL') return 'https://xwulpvlovglsfswmjwyt.supabase.co'; 
+      if (key === 'SUPABASE_ANON_KEY') return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3dWxwdmxvdmdsc2Zzd21qd3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxMjE1ODEsImV4cCI6MjA3MzY5NzU4MX0.oqZk94gn8aXLt9SbmM98Yw0H1efcq4KuZAudCRNnnbE';
       return undefined;
     }),
   };
@@ -18,7 +17,7 @@ describe('SupabaseService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupabaseService,
-        { provide: ConfigService, useValue: configMock }, // << mock
+        { provide: ConfigService, useValue: configMock }, 
       ],
     }).compile();
 

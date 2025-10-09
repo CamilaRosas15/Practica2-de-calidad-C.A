@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { SupabaseService } from 'src/supabase/supabase/supabase.service';
+import { ConflictException, InternalServerErrorException } from '@nestjs/common';
 
-describe('AuthService', () => {
+describe('AuthService.register (branch coverage)', () => {
   let service: AuthService;
-  // Mock minimo del cliente de Supabase
+
+  // Mock mínimo del cliente de Supabase que necesitamos
   const supabaseClientMock = () => ({
     auth: {
       signUp: jest.fn(),
@@ -35,9 +37,68 @@ describe('AuthService', () => {
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
-     expect(service).toBeDefined();
+  it('1) Camino feliz: signUp OK con user y session → retorna {data, null}', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: { user: { id: 'u1' }, session: { access_token: 'T' } },
+      error: null,
+    });
+
+    const res = await service.register({ email: 'a@a.com', password: 'p' });
+
+    expect(client.auth.signUp).toHaveBeenCalledWith({
+      email: 'a@a.com',
+      password: 'p',
+      options: expect.any(Object),
+    });
+    expect(res.error).toBeNull();
+    expect(res.data?.user?.id).toBe('u1');
+    expect(res.data?.session?.access_token).toBe('T');
   });
 
-  
+  it('2) User sin session: llama forceLoginAfterRegistration y retorna su resultado', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: { user: { id: 'u1' }, session: null },
+      error: null,
+    });
+
+    const forced = {
+      data: { user: { id: 'u1' }, session: { access_token: 'FORCED' } },
+      error: null,
+    };
+
+    const spyForce = jest
+      .spyOn<any, any>(service as any, 'forceLoginAfterRegistration')
+      .mockResolvedValue(forced);
+
+    const res = await service.register({ email: 'b@b.com', password: 'p2' });
+
+    expect(spyForce).toHaveBeenCalledWith('b@b.com', 'p2');
+    expect(res.data?.session?.access_token).toBe('FORCED');
+  });
+
+  it('3) Error conocido: "User already registered" → ConflictException', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: null,
+      error: { message: 'User already registered' } as any,
+    });
+
+    await expect(
+      service.register({ email: 'dup@x.com', password: 'p' }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('4) Error distinto → InternalServerErrorException con mensaje', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: null,
+      error: { message: 'DB down' } as any,
+    });
+
+    await expect(
+      service.register({ email: 'err@x.com', password: 'p' }),
+    ).rejects.toThrow(InternalServerErrorException);
+
+    await expect(
+      service.register({ email: 'err@x.com', password: 'p' }),
+    ).rejects.toThrow('Registration failed: DB down');
+  });
 });

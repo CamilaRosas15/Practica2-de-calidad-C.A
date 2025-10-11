@@ -39,20 +39,20 @@ describe('AuthService.register (branch coverage)', () => {
 
   it('1) Camino feliz: signUp OK con user y session → retorna {data, null}', async () => {
     client.auth.signUp.mockResolvedValue({
-      data: { user: { id: 'u1' }, session: { access_token: 'T' } },
+      data: { user: { id: 'u1' }, session: { access_token: 'Tdsggdf' } },
       error: null,
     });
 
-    const res = await service.register({ email: 'a@a.com', password: 'p' });
+    const res = await service.register({ email: 'esta.es.una.prueba@gmail.com', password: '123456' });
 
     expect(client.auth.signUp).toHaveBeenCalledWith({
-      email: 'a@a.com',
-      password: 'p',
+      email: 'esta.es.una.prueba@gmail.com',
+      password: '123456',
       options: expect.any(Object),
     });
     expect(res.error).toBeNull();
     expect(res.data?.user?.id).toBe('u1');
-    expect(res.data?.session?.access_token).toBe('T');
+    expect(res.data?.session?.access_token).toBe('Tdsggdf');
   });
 
   it('2) User sin session: llama forceLoginAfterRegistration y retorna su resultado', async () => {
@@ -70,9 +70,9 @@ describe('AuthService.register (branch coverage)', () => {
       .spyOn<any, any>(service as any, 'forceLoginAfterRegistration')
       .mockResolvedValue(forced);
 
-    const res = await service.register({ email: 'b@b.com', password: 'p2' });
+    const res = await service.register({ email: 'ops.rate.limit@gmail.com', password: '12345678' });
 
-    expect(spyForce).toHaveBeenCalledWith('b@b.com', 'p2');
+    expect(spyForce).toHaveBeenCalledWith('ops.rate.limit@gmail.com', '12345678');
     expect(res.data?.session?.access_token).toBe('FORCED');
   });
 
@@ -83,7 +83,7 @@ describe('AuthService.register (branch coverage)', () => {
     });
 
     await expect(
-      service.register({ email: 'dup@x.com', password: 'p' }),
+      service.register({ email: 'ya.registrada@gmail.com,', password: '12345678' }),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -94,11 +94,11 @@ describe('AuthService.register (branch coverage)', () => {
     });
 
     await expect(
-      service.register({ email: 'err@x.com', password: 'p' }),
+      service.register({ email: 'pruebas.reg2@gmail.com', password: '12345678' }),
     ).rejects.toThrow(InternalServerErrorException);
 
     await expect(
-      service.register({ email: 'err@x.com', password: 'p' }),
+      service.register({ email: 'pruebas.reg2@gmail.com', password: '12345678' }),
     ).rejects.toThrow('Registration failed: DB down');
   });
 });

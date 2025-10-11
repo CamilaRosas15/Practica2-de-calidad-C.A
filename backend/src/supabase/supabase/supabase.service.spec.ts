@@ -280,7 +280,7 @@ describe('SupabaseService', () => {
         expect(resultado).toEqual({ ...RECETA_BASE, ingredientes: [] });
     });
   });
-  
+
   describe('getRecetaById', () => {
     const RECETA_ID = 5;
     const RECETA_MOCK = { id_receta: RECETA_ID, nombre: 'Sopa de Tomate' };
@@ -327,6 +327,52 @@ describe('SupabaseService', () => {
 
       const resultado = await service.getRecetaById(RECETA_ID);
 
+      expect(resultado).toBeNull();
+    });
+  });
+  describe('getUserDetails', () => {
+    const USER_ID = 'auth0|123456789';
+    const USER_DETAILS_MOCK = { id: USER_ID, nombre: 'Juan Perez', email: 'juan@example.com' };
+    const ERROR_MOCK: PostgrestError = {
+      name: 'PostgrestError',
+      message: 'Usuario no encontrado',
+      details: '',
+      hint: '',
+      code: '404',
+    };
+
+    // Caso 1: Camino Exitoso
+    it('debe devolver los detalles del usuario cuando se encuentra', async () => {
+      supabaseClientMock.from.mockImplementation((tableName: string) => {
+        if (tableName === 'usuario_detalles') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: USER_DETAILS_MOCK, error: null }),
+          };
+        }
+      });
+
+      const resultado = await service.getUserDetails(USER_ID);
+
+      expect(resultado).not.toBeNull();
+      expect(resultado).toEqual(USER_DETAILS_MOCK);
+      expect(resultado.nombre).toBe('Juan Perez');
+    });
+
+    // Caso 2: Error o Usuario no encontrado
+    it('debe devolver null si ocurre un error o el usuario no se encuentra', async () => {
+      supabaseClientMock.from.mockImplementation((tableName: string) => {
+        if (tableName === 'usuario_detalles') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: null, error: ERROR_MOCK }),
+          };
+        }
+      });
+
+      const resultado = await service.getUserDetails(USER_ID);
       expect(resultado).toBeNull();
     });
   });

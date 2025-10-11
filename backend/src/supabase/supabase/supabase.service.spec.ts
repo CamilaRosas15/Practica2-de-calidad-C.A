@@ -280,4 +280,54 @@ describe('SupabaseService', () => {
         expect(resultado).toEqual({ ...RECETA_BASE, ingredientes: [] });
     });
   });
+  
+  describe('getRecetaById', () => {
+    const RECETA_ID = 5;
+    const RECETA_MOCK = { id_receta: RECETA_ID, nombre: 'Sopa de Tomate' };
+    const ERROR_MOCK: PostgrestError = {
+      name: 'PostgrestError',
+      message: 'Receta no encontrada',
+      details: '',
+      hint: '',
+      code: '404',
+    };
+
+    // Caso 1: Camino Exitoso
+    it('debe devolver los datos de una receta cuando se encuentra', async () => {
+      // Simula la cadena de llamadas completa para esta prueba
+      supabaseClientMock.from.mockImplementation((tableName: string) => {
+        if (tableName === 'recetas') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: RECETA_MOCK, error: null }),
+          };
+        }
+      });
+
+      const resultado = await service.getRecetaById(RECETA_ID);
+
+      expect(resultado).not.toBeNull();
+      expect(resultado).toEqual(RECETA_MOCK);
+      expect(resultado.nombre).toBe('Sopa de Tomate');
+    });
+
+    // Caso 2: Error o Receta no encontrada
+    it('debe devolver null si ocurre un error o la receta no se encuentra', async () => {
+      // Simula la cadena de llamadas para que devuelva un error
+      supabaseClientMock.from.mockImplementation((tableName: string) => {
+        if (tableName === 'recetas') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: null, error: ERROR_MOCK }),
+          };
+        }
+      });
+
+      const resultado = await service.getRecetaById(RECETA_ID);
+
+      expect(resultado).toBeNull();
+    });
+  });
 });

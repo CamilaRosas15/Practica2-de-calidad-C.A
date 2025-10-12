@@ -409,5 +409,86 @@ describe('AuthService', () => {
     expect(upsertMock).toHaveBeenCalledTimes(1);
   });
 });
+describe('AuthService.getUserProfile (statement + branch coverage)', () => {
+  let fromMock: jest.Mock;
+  let selectMock: jest.Mock;
+  let eqMock: jest.Mock;
+  let singleMock: jest.Mock;
+
+  beforeEach(async () => {
+    // Reusa tu client base (solo auth)…
+    client = supabaseClientMock();
+
+    // Cadena: from('usuario_detalles').select('*').eq('id', userId).single()
+    singleMock = jest.fn();
+    eqMock     = jest.fn().mockReturnValue({ single: singleMock });
+    selectMock = jest.fn().mockReturnValue({ eq: eqMock });
+    fromMock   = jest.fn().mockReturnValue({ select: selectMock, eq: eqMock, single: singleMock });
+
+    // Cliente local con 'from' + 'auth' (sin romper el tipo de client)
+    const clientWithFrom: any = { ...client, from: fromMock };
+
+    supabaseSvc = supabaseServiceMock();
+    supabaseSvc.getClient.mockReturnValue(clientWithFrom);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: SupabaseService, useValue: supabaseSvc },
+      ],
+    }).compile();
+
+    service = module.get(AuthService);
+    jest.clearAllMocks();
+  });
+
+  // G1 — Camino feliz: data encontrada → retorna data
+  it('G1: retorna el perfil cuando existe (happy path)', async () => {
+    const userId = 'u123';
+    const dbRow = { id: userId, nombre: 'Cami Dev', sexo: 'Femenino' };
+
+    singleMock.mockResolvedValue({ data: dbRow, error: null });
+
+    const res = await service.getUserProfile(userId);
+
+    expect(fromMock).toHaveBeenCalledWith('usuario_detalles');
+    expect(selectMock).toHaveBeenCalledWith('*');
+    expect(eqMock).toHaveBeenCalledWith('id', userId);
+    expect(res).toEqual(dbRow);
+  });
+
+  // G2 — No existe: error.code === 'PGRST116' → retorna null
+  it('G2: no hay perfil (PGRST116) → retorna null', async () => {
+    const userId = 'u404';
+    singleMock.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } });
+
+    const res = await service.getUserProfile(userId);
+
+    expect(fromMock).toHaveBeenCalledWith('usuario_detalles');
+    expect(selectMock).toHaveBeenCalledWith('*');
+    expect(eqMock).toHaveBeenCalledWith('id', userId);
+    expect(res).toBeNull();
+  });
+
+  // G3 — Error de BD distinto → se envuelve en catch y lanza "Failed to fetch user profile."
+  it('G3: error de BD distinto a PGRST116 → lanza InternalServerError("Failed to fetch user profile.")', async () => {
+    const userId = 'u500';
+    singleMock.mockResolvedValue({ data: null, error: { code: 'XX001', message: 'db exploded' } });
+
+    await expect(service.getUserProfile(userId))
+      .rejects.toThrow(new InternalServerErrorException('Failed to fetch user profile.'));
+  });
+
+  // G4 — Excepción inesperada (SDK/network) → catch → "Failed to fetch user profile."
+  it('G4: excepción inesperada (SDK/Network) → lanza InternalServerError("Failed to fetch user profile.")', async () => {
+    const userId = 'uX';
+    // .single() rechaza (throw async)
+    singleMock.mockRejectedValue(new Error('Network down'));
+
+    await expect(service.getUserProfile(userId))
+      .rejects.toThrow(new InternalServerErrorException('Failed to fetch user profile.'));
+  });
+});
+
 
 });

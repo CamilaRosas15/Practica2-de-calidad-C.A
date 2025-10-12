@@ -23,7 +23,7 @@ const mockLogger = {
 const originalSetTimeout = setTimeout;
 beforeAll(() => {
   (global.setTimeout as any) = (fn: (...args: any[]) => void, ms?: number, ...args: any[]): NodeJS.Timeout => {
-    fn(...args);
+    fn(...args); 
     return originalSetTimeout(() => {}, 0) as any; 
   };
 });
@@ -190,4 +190,65 @@ describe('AuthService', () => {
       expect(result.error).toBeNull();
     });
   });
+    describe('login()', () => {
+    it('C1: camino feliz → retorna data/session', async () => {
+      client.auth.signInWithPassword.mockResolvedValue({
+        data: { user: { id: 'u3' }, session: { access_token: 'djdskfhaskdjhfjk' } },
+        error: null,
+      });
+
+      const res = await service.login({ email: 'camilaprueba@a.com', password: 'prueba123' });
+
+      expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
+        email: 'camilaprueba@a.com',
+        password: 'prueba123',
+      });
+      expect(res.error).toBeNull();
+      expect(res.data?.user?.id).toBe('u3');
+      expect(res.data?.session?.access_token).toBe('djdskfhaskdjhfjk');
+    });
+
+    it('C2: email no confirmado → definitiveEmailConfirmationSolution y retorna', async () => {
+      client.auth.signInWithPassword.mockResolvedValue({
+        data: null,
+        error: { message: 'Email not confirmed' },
+      });
+
+      const spyDef = jest
+        .spyOn<any, any>(service as any, 'definitiveEmailConfirmationSolution')
+        .mockResolvedValue({
+          data: { user: { id: 'u2' }, session: { access_token: 'CONF' } },
+          error: null,
+        });
+
+      const res = await service.login({ email: 'pending@x.com', password: '123456' });
+
+      expect(spyDef).toHaveBeenCalledWith('pending@x.com', '123456');
+      expect(res.error).toBeNull();
+      expect(res.data?.session?.access_token).toBe('CONF');
+    });
+
+    it('C3: credenciales invalidas → Unauthorized con mensaje', async () => {
+      client.auth.signInWithPassword.mockResolvedValue({
+        data: null,
+        error: { message: 'Invalid login credentials' },
+      });
+
+      await expect(
+        service.login({ email: 'badprueba@x.com', password: 'wrong' })
+      ).rejects.toThrow('Invalid email or password.');
+    });
+
+    it('C4: error genErico → Unauthorized con detalle del proveedor', async () => {
+      client.auth.signInWithPassword.mockResolvedValue({
+        data: null,
+        error: { message: 'rate limit exceeded' },
+      });
+
+      await expect(
+        service.login({ email: 'rate@x.com', password: '123456' })
+      ).rejects.toThrow('Login failed: rate limit exceeded');
+    });
+  });
+
 });

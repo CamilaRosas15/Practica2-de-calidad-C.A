@@ -86,4 +86,91 @@ describe('RecipesService', () => {
       expect((service as any).sanitizeLlmAnswer(input)).toBe(expected);
     });
   });
+  describe('askOllama', () => {
+    const testPrompt = 'Recomienda una receta';
+
+    // Antes de cada test en ESTA suite, nos aseguramos de que 'fetch' sea una función mock
+    beforeEach(() => {
+      global.fetch = jest.fn();
+    });
+
+    // Caso 1: Camino Exitoso
+    it('debe devolver el contenido del mensaje en una respuesta exitosa', async () => {
+      (fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          message: { content: '  La mejor receta es la de tacos.  ' },
+        }),
+      });
+
+      const result = await (service as any).askOllama(testPrompt);
+      expect(result).toBe('La mejor receta es la de tacos.');
+    });
+
+    // Caso 2: Error de Red
+    it('debe lanzar un error si la llamada fetch es rechazada', async () => {
+      const networkError = new Error('Failed to fetch');
+      (fetch as jest.Mock).mockRejectedValue(networkError);
+
+      await expect((service as any).askOllama(testPrompt)).rejects.toThrow('Failed to fetch');
+    });
+
+    // Caso 3: Error de API (HTTP 500)
+    it('debe lanzar un error si la respuesta de la API no es "ok"', async () => {
+      (fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error',
+      });
+
+      await expect((service as any).askOllama(testPrompt)).rejects.toThrow('Ollama error 500: Internal Server Error');
+    });
+
+    // Caso 4: Respuesta Malformada (No es JSON)
+    it('debe lanzar un error si el cuerpo de la respuesta no es un JSON válido', async () => {
+      (fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => { throw new Error('Invalid JSON'); },
+      });
+      
+      await expect((service as any).askOllama(testPrompt)).rejects.toThrow('Invalid JSON');
+    });
+
+    // Caso 5: Estructura JSON Inesperada
+    it('debe devolver un string vacío si la estructura del JSON no contiene message.content', async () => {
+      (fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: 'formato inesperado' }),
+      });
+
+      const result = await (service as any).askOllama(testPrompt);
+      expect(result).toBe('');
+    });
+
+    // Caso 6: Usa Variables de Entorno
+    it('debe usar la URL y el modelo de las variables de entorno si están definidas', async () => {
+      const originalBaseUrl = process.env.OLLAMA_BASE_URL;
+      const originalModel = process.env.OLLAMA_MODEL;
+      process.env.OLLAMA_BASE_URL = 'http://test-url.com';
+      process.env.OLLAMA_MODEL = 'test-model:latest';
+      
+      (fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: { content: 'ok' } }),
+      });
+
+      await (service as any).askOllama(testPrompt);
+
+      expect(fetch).toHaveBeenCalledWith('http://test-url.com/api/chat', expect.any(Object));
+      const fetchBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+      expect(fetchBody.model).toBe('test-model:latest');
+
+      // Restaurar las variables de entorno para no afectar otros tests
+      process.env.OLLAMA_BASE_URL = originalBaseUrl;
+      process.env.OLLAMA_MODEL = originalModel;
+    });
+  });
 });

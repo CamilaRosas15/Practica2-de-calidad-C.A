@@ -191,7 +191,7 @@ describe('AuthService', () => {
     });
   });
     describe('login()', () => {
-    it('C1: camino feliz → retorna data/session', async () => {
+    it('1) camino feliz → retorna data/session', async () => {
       client.auth.signInWithPassword.mockResolvedValue({
         data: { user: { id: 'u3' }, session: { access_token: 'djdskfhaskdjhfjk' } },
         error: null,
@@ -208,7 +208,7 @@ describe('AuthService', () => {
       expect(res.data?.session?.access_token).toBe('djdskfhaskdjhfjk');
     });
 
-    it('C2: email no confirmado → definitiveEmailConfirmationSolution y retorna', async () => {
+    it('2) email no confirmado → definitiveEmailConfirmationSolution y retorna', async () => {
       client.auth.signInWithPassword.mockResolvedValue({
         data: null,
         error: { message: 'Email not confirmed' },
@@ -228,7 +228,7 @@ describe('AuthService', () => {
       expect(res.data?.session?.access_token).toBe('CONF');
     });
 
-    it('C3: credenciales invalidas → Unauthorized con mensaje', async () => {
+    it('3) credenciales invalidas → Unauthorized con mensaje', async () => {
       client.auth.signInWithPassword.mockResolvedValue({
         data: null,
         error: { message: 'Invalid login credentials' },
@@ -239,7 +239,7 @@ describe('AuthService', () => {
       ).rejects.toThrow('Invalid email or password.');
     });
 
-    it('C4: error genErico → Unauthorized con detalle del proveedor', async () => {
+    it('4) error genErico → Unauthorized con detalle del proveedor', async () => {
       client.auth.signInWithPassword.mockResolvedValue({
         data: null,
         error: { message: 'rate limit exceeded' },
@@ -250,5 +250,164 @@ describe('AuthService', () => {
       ).rejects.toThrow('Login failed: rate limit exceeded');
     });
   });
+  describe('AuthService.saveUserProfile (statement coverage)', () => {
+  let fromMock: jest.Mock;
+  let upsertMock: jest.Mock;
+  let selectMock: jest.Mock;
+  let singleMock: jest.Mock;
+
+  beforeEach(async () => {
+    client = supabaseClientMock();
+
+    singleMock = jest.fn();
+    selectMock = jest.fn().mockReturnValue({ single: singleMock });
+    upsertMock = jest.fn().mockReturnValue({ select: selectMock });
+    fromMock   = jest.fn().mockReturnValue({ upsert: upsertMock, select: selectMock, single: singleMock });
+
+    const clientWithFrom: any = { ...client, from: fromMock };
+
+    supabaseSvc = supabaseServiceMock();
+    supabaseSvc.getClient.mockReturnValue(clientWithFrom);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: SupabaseService, useValue: supabaseSvc },
+      ],
+    }).compile();
+
+    service = module.get(AuthService);
+    jest.clearAllMocks();
+  });
+
+  it('1) guarda OK con normalizaciones (sexo inválido, arrays a CSV, usa calorías objetivo como fallback)', async () => {
+    const userId = 'u123';
+    const profileDto: any = {
+      nombre_completo: 'Cami Dev',
+      edad: 22,
+      peso: 60,
+      altura: 1.65,
+      sexo: 'NoValido',               
+      gustos: ['pizza', 'pasta'],      
+      alergias: [],                    
+      no_me_gusta: ['cebolla'],        
+      objetivo_calorico: undefined,    
+      calorias_diarias_objetivo: 1800,
+      objetivo_salud: 'fit',
+    };
+
+    singleMock.mockResolvedValue({ data: { id: userId, nombre: 'Cami Dev', sexo: 'Otro' }, error: null });
+
+    const res = await service.saveUserProfile(userId, profileDto);
+
+    expect(fromMock).toHaveBeenCalledWith('usuario_detalles');
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+
+    const payload = upsertMock.mock.calls[0][0];
+    const options = upsertMock.mock.calls[0][1];
+
+    expect(options).toEqual({ onConflict: 'id' });
+    expect(payload).toEqual(
+      expect.objectContaining({
+        id: userId,
+        nombre: 'Cami Dev',
+        edad: 22,
+        altura: 1.65,
+        peso: 60,
+        sexo: 'Otro',
+        objetivo_calorico: 1800,     
+        gustos: 'pizza, pasta',
+        alergias: '',                
+        no_me_gusta: 'cebolla',
+      })
+    );
+
+    expect(res).toEqual({ id: userId, nombre: 'Cami Dev', sexo: 'Otro' });
+  });
+
+  it('2) guarda OK con sexo válido y strings; usa objetivo_calorico (sin fallback)', async () => {
+    const userId = 'u200';
+    const profileDto: any = {
+      nombre_completo: 'Alex',
+      edad: 30,
+      peso: 80,
+      altura: 1.8,
+      sexo: 'Femenino',          
+      gustos: 'helado',            
+      alergias: 'mani',            
+      no_me_gusta: '',             
+      objetivo_calorico: 2000,     
+      calorias_diarias_objetivo: 1500, 
+      objetivo_salud: 'salud',
+    };
+
+    singleMock.mockResolvedValue({ data: { id: userId, nombre: 'Alex', sexo: 'Femenino' }, error: null });
+
+    const res = await service.saveUserProfile(userId, profileDto);
+
+    const payload = upsertMock.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        id: userId,
+        nombre: 'Alex',
+        edad: 30,
+        altura: 1.8,
+        peso: 80,
+        sexo: 'Femenino',
+        objetivo_calorico: 2000,  
+        gustos: 'helado',
+        alergias: 'mani',
+        no_me_gusta: '',
+      })
+    );
+
+    expect(res).toEqual({ id: userId, nombre: 'Alex', sexo: 'Femenino' });
+  });
+
+  it('3) nombre_completo requerido + retorna InternalServerError y NO llama a DB', async () => {
+    const userId = 'u999';
+    const profileDto: any = { nombre_completo: '   ' };
+
+    await expect(service.saveUserProfile(userId, profileDto))
+      .rejects.toThrow(new InternalServerErrorException('Failed to save user profile.'));
+
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it('4) error del DB al guardar + retorna InternalServerError("Failed to save user profile.")', async () => {
+    const userId = 'u777';
+    const profileDto: any = {
+      nombre_completo: 'Dana',
+      edad: 25,
+      peso: 55,
+      sexo: 'Masculino',
+      gustos: 'asado',
+      alergias: '',
+      no_me_gusta: '',
+    };
+
+    singleMock.mockResolvedValue({ data: null, error: { message: 'duplicate key' } });
+
+    await expect(service.saveUserProfile(userId, profileDto))
+      .rejects.toThrow(new InternalServerErrorException('Failed to save user profile.'));
+
+    expect(fromMock).toHaveBeenCalledWith('usuario_detalles');
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('5) excepción inesperada (SDK/Network) → lanza InternalServerError("Failed to save user profile.")', async () => {
+    const userId = 'uX';
+    const profileDto: any = { nombre_completo: 'Pat', edad: 28, peso: 70 };
+
+    singleMock.mockRejectedValue(new Error('Network down'));
+
+    await expect(service.saveUserProfile(userId, profileDto))
+      .rejects.toThrow(new InternalServerErrorException('Failed to save user profile.'));
+
+    expect(fromMock).toHaveBeenCalledWith('usuario_detalles');
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+  });
+});
 
 });

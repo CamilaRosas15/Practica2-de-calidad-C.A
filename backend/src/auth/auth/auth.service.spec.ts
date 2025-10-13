@@ -546,4 +546,113 @@ describe('AuthService.logout statement + branck coverage', () => {
     expect(mockLogger.log).not.toHaveBeenCalledWith('User logged out successfully');
   });
 });
+describe('AuthService.definitiveEmailConfirmationSolution', () => {
+  beforeEach(async () => {
+    client = supabaseClientMock();
+    supabaseSvc = supabaseServiceMock();
+    supabaseSvc.getClient.mockReturnValue(client);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: SupabaseService, useValue: supabaseSvc },
+        { provide: Logger, useValue: mockLogger },
+      ],
+    }).compile();
+
+    service = module.get(AuthService);
+    (service as any).logger = mockLogger;
+
+    jest.clearAllMocks();
+  });
+
+  const callDef = (email: string, password: string) =>
+    (service as any).definitiveEmailConfirmationSolution(email, password);
+
+  it('1) exito en el primer intento y loguea error de signup (mensaje distinto a "already registered")', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: {},
+      error: { message: 'quota exceeded' },
+    });
+
+    client.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { user: { id: 'u1' }, session: { access_token: 'T1' } },
+      error: null,
+    });
+
+    const res = await callDef('prueba1@gmail.com', 'pass1');
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Signup attempt failed: quota exceeded',
+    );
+    expect(client.auth.signInWithPassword).toHaveBeenCalledTimes(1);
+    expect(res.data?.session?.access_token).toBe('T1');
+  });
+
+  it('2) 2 fallos y luego exito; signup "already registered" NO loguea error', async () => {
+    client.auth.signUp.mockResolvedValue({
+      data: {},
+      error: { message: 'already registered' },
+    });
+
+    client.auth.signInWithPassword
+      .mockResolvedValueOnce({ data: null, error: { message: 'rate limit' } })
+      .mockResolvedValueOnce({ data: null, error: { message: 'temporarily unavailable' } })
+      .mockResolvedValueOnce({
+        data: { user: { id: 'u3' }, session: { access_token: 'T3' } },
+        error: null,
+      });
+
+    const res = await callDef('prueba2@gmail.com', 'pass2');
+
+    expect(mockLogger.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('Signup attempt failed:'),
+    );
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Attempt 1 failed - waiting 1000ms',
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Attempt 2 failed - waiting 2000ms',
+    );
+    expect(mockLogger.log).toHaveBeenCalledWith(
+      'Definitive solution successful on attempt 3',
+    );
+    expect(res.data?.session?.access_token).toBe('T3');
+  });
+
+  it('3) 8 intentos fallidos → catch → Unauthorized("Please try…")', async () => {
+    client.auth.signUp.mockResolvedValue({ data: {}, error: null });
+
+    for (let i = 0; i < 8; i++) {
+      client.auth.signInWithPassword.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Email not confirmed' },
+      });
+    }
+
+    await expect(callDef('prueba3@gmail.com', 'pass3')).rejects.toThrow(
+      new UnauthorizedException('Please try registering again or use a different email.'),
+    );
+
+    expect(client.auth.signInWithPassword).toHaveBeenCalledTimes(8);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Attempt 8 failed - waiting 8000ms',
+    );
+  });
+
+  it('4) signup lanza → catch → Unauthorized("Please try…")', async () => {
+    client.auth.signUp.mockRejectedValue(new Error('network down'));
+
+    await expect(callDef('prueba4@gmail.com', 'pass4')).rejects.toThrow(
+      new UnauthorizedException('Please try registering again or use a different email.'),
+    );
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Definitive solution failed: network down',
+    );
+    expect(client.auth.signInWithPassword).not.toHaveBeenCalled();
+  });
+});
+
 });

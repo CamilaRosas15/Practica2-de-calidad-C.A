@@ -397,7 +397,7 @@ describe('AuthService', () => {
   });
 
   it('5) excepción inesperada (SDK/Network) → lanza InternalServerError("Failed to save user profile.")', async () => {
-    const userId = 'uX';
+    const userId = 'u0989';
     const profileDto: any = { nombre_completo: 'Pat', edad: 28, peso: 70 };
 
     singleMock.mockRejectedValue(new Error('Network down'));
@@ -409,23 +409,20 @@ describe('AuthService', () => {
     expect(upsertMock).toHaveBeenCalledTimes(1);
   });
 });
-describe('AuthService.getUserProfile (statement + branch coverage)', () => {
+describe('AuthService.getUserProfile statement + branck coverage )', () => {
   let fromMock: jest.Mock;
   let selectMock: jest.Mock;
   let eqMock: jest.Mock;
   let singleMock: jest.Mock;
 
   beforeEach(async () => {
-    // Reusa tu client base (solo auth)…
     client = supabaseClientMock();
 
-    // Cadena: from('usuario_detalles').select('*').eq('id', userId).single()
     singleMock = jest.fn();
     eqMock     = jest.fn().mockReturnValue({ single: singleMock });
     selectMock = jest.fn().mockReturnValue({ eq: eqMock });
     fromMock   = jest.fn().mockReturnValue({ select: selectMock, eq: eqMock, single: singleMock });
 
-    // Cliente local con 'from' + 'auth' (sin romper el tipo de client)
     const clientWithFrom: any = { ...client, from: fromMock };
 
     supabaseSvc = supabaseServiceMock();
@@ -442,8 +439,7 @@ describe('AuthService.getUserProfile (statement + branch coverage)', () => {
     jest.clearAllMocks();
   });
 
-  // G1 — Camino feliz: data encontrada → retorna data
-  it('G1: retorna el perfil cuando existe (happy path)', async () => {
+  it('1) retorna el perfil cuando existe (happy path)', async () => {
     const userId = 'u123';
     const dbRow = { id: userId, nombre: 'Cami Dev', sexo: 'Femenino' };
 
@@ -457,8 +453,7 @@ describe('AuthService.getUserProfile (statement + branch coverage)', () => {
     expect(res).toEqual(dbRow);
   });
 
-  // G2 — No existe: error.code === 'PGRST116' → retorna null
-  it('G2: no hay perfil (PGRST116) → retorna null', async () => {
+  it('2) no hay perfil (PGRST116) → retorna null', async () => {
     const userId = 'u404';
     singleMock.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } });
 
@@ -470,25 +465,85 @@ describe('AuthService.getUserProfile (statement + branch coverage)', () => {
     expect(res).toBeNull();
   });
 
-  // G3 — Error de BD distinto → se envuelve en catch y lanza "Failed to fetch user profile."
-  it('G3: error de BD distinto a PGRST116 → lanza InternalServerError("Failed to fetch user profile.")', async () => {
+  it('3) error de BD distinto a PGRST116 → lanza InternalServerError("Failed to fetch user profile.")', async () => {
     const userId = 'u500';
-    singleMock.mockResolvedValue({ data: null, error: { code: 'XX001', message: 'db exploded' } });
+    singleMock.mockResolvedValue({ data: null, error: { code: 'LSKJF001', message: 'db exploded' } });
 
     await expect(service.getUserProfile(userId))
       .rejects.toThrow(new InternalServerErrorException('Failed to fetch user profile.'));
   });
 
-  // G4 — Excepción inesperada (SDK/network) → catch → "Failed to fetch user profile."
-  it('G4: excepción inesperada (SDK/Network) → lanza InternalServerError("Failed to fetch user profile.")', async () => {
+  it('4) excepción inesperada (SDK/Network) → lanza InternalServerError("Failed to fetch user profile.")', async () => {
     const userId = 'uX';
-    // .single() rechaza (throw async)
     singleMock.mockRejectedValue(new Error('Network down'));
 
     await expect(service.getUserProfile(userId))
       .rejects.toThrow(new InternalServerErrorException('Failed to fetch user profile.'));
   });
 });
+describe('AuthService.logout statement + branck coverage', () => {
+  let signOutMock: jest.Mock;
 
+  beforeEach(async () => {
+    client = supabaseClientMock();
 
+    signOutMock = jest.fn();
+    const clientWithSignOut: any = {
+      ...client,
+      auth: {
+        ...client.auth,
+        signOut: signOutMock,
+      },
+    };
+
+    supabaseSvc = supabaseServiceMock();
+    supabaseSvc.getClient.mockReturnValue(clientWithSignOut);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: SupabaseService, useValue: supabaseSvc },
+        { provide: Logger, useValue: mockLogger }, 
+      ],
+    }).compile();
+
+    service = module.get(AuthService);
+    (service as any).logger = mockLogger;
+    jest.clearAllMocks();
+  });
+
+  it('1) signOut sin error → registra éxito', async () => {
+    signOutMock.mockResolvedValue({ error: null });
+
+    await service.logout();
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('Logout error:')
+    );
+    expect(mockLogger.log).toHaveBeenCalledWith('User logged out successfully');
+  });
+
+  it('2) signOut con {error} → loguea error y luego Exito', async () => {
+    signOutMock.mockResolvedValue({ error: { message: 'rate limit' } });
+
+    await service.logout();
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).toHaveBeenCalledWith('Logout error: rate limit');
+    expect(mockLogger.log).toHaveBeenCalledWith('User logged out successfully');
+  });
+
+  it('3) signOut lanza (SDK/Network) → loguea unexpected error', async () => {
+    signOutMock.mockRejectedValue(new Error('Network down'));
+
+    await service.logout();
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Unexpected logout error: Network down'
+    );
+    expect(mockLogger.log).not.toHaveBeenCalledWith('User logged out successfully');
+  });
+});
 });

@@ -173,4 +173,25 @@ describe('RecipesService', () => {
       process.env.OLLAMA_MODEL = originalModel;
     });
   });
+  describe('getById', () => {
+    const RECIPE_ID = 123;
+    const RECIPE_MOCK = { id_receta: RECIPE_ID, titulo: 'Receta de Prueba' };
+
+    // Caso 1: Camino Exitoso
+    it('debe llamar a supabase.getRecetaCompletaById con el ID correcto y devolver el resultado', async () => {
+      supabaseMock.getRecetaCompletaById.mockResolvedValue(RECIPE_MOCK);
+      const resultado = await service.getById(RECIPE_ID);
+      expect(supabaseMock.getRecetaCompletaById).toHaveBeenCalledTimes(1);
+      expect(supabaseMock.getRecetaCompletaById).toHaveBeenCalledWith(RECIPE_ID);
+      expect(resultado).toEqual(RECIPE_MOCK);
+    });
+
+    // Caso 2: Camino Nulo
+    it('debe devolver null si supabase.getRecetaCompletaById devuelve null', async () => {
+      supabaseMock.getRecetaCompletaById.mockResolvedValue(null);
+      const resultado = await service.getById(RECIPE_ID);
+      expect(supabaseMock.getRecetaCompletaById).toHaveBeenCalledWith(RECIPE_ID);
+      expect(resultado).toBeNull();
+    });
+  });
 });

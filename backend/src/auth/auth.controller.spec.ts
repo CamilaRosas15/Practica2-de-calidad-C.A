@@ -26,7 +26,7 @@ describe('AuthController', () => {
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
-
+  //register
   it('register devuelve message, userId y email', async () => {
     authServiceMock.register.mockResolvedValue({
       data: { user: { id: 'u1' } },
@@ -43,6 +43,7 @@ describe('AuthController', () => {
       email: 'camila@gmail.com',
     });
   });
+  //login
   it('login devuelve message, accessToken y user', async () => {
     authServiceMock.login.mockResolvedValue({
       data: { user: { id: 'u2' }, session: { access_token: 'adafn87n3nkaifinq' } },
@@ -59,7 +60,7 @@ describe('AuthController', () => {
       user: { id: 'u2' },
     });
   });
-
+  //saveprofile
   it('saveProfile, sin userId y BadRequest', async () => {
     await expect(
       controller.saveProfile('' as any, {} as any),

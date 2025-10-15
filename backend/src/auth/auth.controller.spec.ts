@@ -85,4 +85,37 @@ describe('AuthController', () => {
       profile: saved,
     });
   });
+  //getProfile
+  it('getProfile, sin userId y BadRequest', async () => {
+    await expect(
+      controller.getProfile('' as any),
+    ).rejects.toThrow(
+      new BadRequestException('User ID is required in the URL parameter.'),
+    );
+
+    expect(authServiceMock.getUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('getProfile, no existe y NotFound', async () => {
+    const userId = 'u404';
+    authServiceMock.getUserProfile.mockResolvedValue(null);
+
+    await expect(controller.getProfile(userId)).rejects.toThrow(
+      new NotFoundException(`Profile for user ID ${userId} not found.`),
+    );
+
+    expect(authServiceMock.getUserProfile).toHaveBeenCalledWith(userId);
+  });
+
+  it('getProfile, retorna el perfil', async () => {
+    const userId = 'u9';
+    const profile = { id: userId, nombre: 'Cami' };
+
+    authServiceMock.getUserProfile.mockResolvedValue(profile);
+
+    const res = await controller.getProfile(userId);
+
+    expect(authServiceMock.getUserProfile).toHaveBeenCalledWith(userId);
+    expect(res).toEqual(profile);
+  });
 });

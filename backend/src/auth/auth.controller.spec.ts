@@ -43,4 +43,20 @@ describe('AuthController', () => {
       email: 'camila@gmail.com',
     });
   });
+  it('login devuelve message, accessToken y user', async () => {
+    authServiceMock.login.mockResolvedValue({
+      data: { user: { id: 'u2' }, session: { access_token: 'adafn87n3nkaifinq' } },
+      error: null,
+    });
+
+    const dto = { email: 'camila.pruba@gmail.com', password: '123456' };
+    const res = await controller.login(dto as any);
+
+    expect(authServiceMock.login).toHaveBeenCalledWith(dto);
+    expect(res).toEqual({
+      message: 'Logged in successfully',
+      accessToken: 'adafn87n3nkaifinq',
+      user: { id: 'u2' },
+    });
+  });
 });

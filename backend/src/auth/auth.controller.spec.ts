@@ -59,4 +59,30 @@ describe('AuthController', () => {
       user: { id: 'u2' },
     });
   });
+
+  it('saveProfile, sin userId y BadRequest', async () => {
+    await expect(
+      controller.saveProfile('' as any, {} as any),
+    ).rejects.toThrow(
+      new BadRequestException('User ID is required in the URL parameter.'),
+    );
+
+    expect(authServiceMock.saveUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('saveProfile, devuelve message y profile', async () => {
+    const userId = 'u1';
+    const profileDto: any = { nombre_completo: 'Cami', edad: 22 };
+    const saved = { id: userId, nombre: 'Cami', edad: 22 };
+
+    authServiceMock.saveUserProfile.mockResolvedValue(saved);
+
+    const res = await controller.saveProfile(userId, profileDto);
+
+    expect(authServiceMock.saveUserProfile).toHaveBeenCalledWith(userId, profileDto);
+    expect(res).toEqual({
+      message: 'User profile saved successfully',
+      profile: saved,
+    });
+  });
 });
